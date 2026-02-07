@@ -1,11 +1,12 @@
-import React, { useState } from "react";
-import Image from "./assets/meskat.jpeg";
+import { Routes, Route } from "react-router-dom";
+
+import Mosquitonet from "./pages/Mosquitonet";
 
 function App() {
   return (
-    <div className=" bg-[#042F1C] flex flex-col items-center justify-center">
-      <img src={Image} alt="" />
-    </div>
+    <Routes>
+      <Route path="/mosquitonet" element={<Mosquitonet />} />
+    </Routes>
   );
 }
 
