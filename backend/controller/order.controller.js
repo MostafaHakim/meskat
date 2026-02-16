@@ -1,4 +1,6 @@
 const Order = require("../model/order.model");
+const { bizSdk, pixelId } = require("../config/facebook");
+const crypto = require("crypto");
 
 const createOrder = async (req, res) => {
   try {
@@ -54,9 +56,44 @@ const createOrder = async (req, res) => {
     });
 
     const savedOrder = await order.save();
-
     // Send SMS notification (example - you'll need to integrate with SMS gateway)
     // await this.sendOrderConfirmationSMS(mobileNumber, savedOrder.orderNumber);
+
+    const userData = new bizSdk.UserData(
+      null,
+      null,
+      null,
+      mobileNumber,
+      customerName.split(" ")[0],
+      customerName.split(" ")[1],
+      null,
+      null,
+      null,
+      null,
+      req.ip,
+      req.get("User-Agent"),
+    );
+    const serverEvent = new bizSdk.ServerEvent(
+      "Purchase",
+      {
+        value: savedOrder.totalAmount,
+        currency: "BDT",
+        order_id: savedOrder._id.toString(),
+      },
+      userData,
+      Date.now() / 1000,
+    );
+
+    const eventsData = [serverEvent];
+    const eventRequest = new bizSdk.EventRequest(eventsData, pixelId);
+    eventRequest.execute().then(
+      (response) => {
+        console.log("Facebook event sent:", response);
+      },
+      (err) => {
+        console.error("Error sending Facebook event:", err);
+      },
+    );
 
     res.status(201).json({
       success: true,

@@ -1,4 +1,5 @@
 const Product = require("../model/product.model");
+const { bizSdk, pixelId } = require("../config/facebook");
 
 const cloudinary = require("../config/cloudinary");
 
@@ -100,6 +101,45 @@ const getAllProducts = async (req, res) => {
 const getProductById = async (req, res) => {
   console.log(req.params.id);
   const product = await Product.findById(req.params.id);
+
+  const userData = new bizSdk.UserData(
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    req.ip,
+    req.get("User-Agent"),
+  );
+  const serverEvent = new bizSdk.ServerEvent(
+    "ViewContent",
+    {
+      content_name: product.name,
+      content_ids: [product._id.toString()],
+      content_type: "product",
+      value: product.variants[0].price,
+      currency: "BDT",
+    },
+    userData,
+    Date.now() / 1000,
+  );
+
+  const eventsData = [serverEvent];
+  const eventRequest = new bizSdk.EventRequest(eventsData, pixelId);
+  eventRequest.execute().then(
+    (response) => {
+      console.log("Facebook event sent:", response);
+    },
+    (err) => {
+      console.error("Error sending Facebook event:", err);
+    },
+  );
+
   res.json(product);
 };
 
