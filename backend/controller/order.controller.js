@@ -82,13 +82,15 @@ const createOrder = async (req, res) => {
     serverEvent.setEventTime(Math.floor(Date.now() / 1000));
     serverEvent.setUserData(userData);
     serverEvent.setCustomData({
-        value: savedOrder.totalAmount,
-        currency: "BDT",
+      value: savedOrder.totalAmount,
+      currency: "BDT",
+      content_ids: [savedOrder._id.toString()], // order reference
+      content_type: "product",
     });
-    serverEvent.setOrderId(savedOrder._id.toString());
-    
+
     const eventsData = [serverEvent];
     const eventRequest = new bizSdk.EventRequest(pixelId, eventsData);
+
     eventRequest.execute().then(
       (response) => {
         console.log("Facebook event sent:", response);
