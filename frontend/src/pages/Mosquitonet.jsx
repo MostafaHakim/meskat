@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import Navbar from "../components/Navbar";
 import axios from "axios";
+import ReactPixel from "react-facebook-pixel";
 
 const API_BASE_URL = import.meta.env.VITE_BASE_URL;
 
@@ -49,6 +50,15 @@ const Mosquitonet = () => {
         if (item.variantId === variantId) {
           const newQuantity = item.quantity + change;
           if (newQuantity >= 0 && newQuantity <= item.stock) {
+            if (item.quantity === 0 && newQuantity === 1) {
+              ReactPixel.track("AddToCart", {
+                content_ids: [item.variantId],
+                content_name: product.name,
+                content_type: "product",
+                currency: "BDT",
+                value: item.price,
+              });
+            }
             return { ...item, quantity: newQuantity };
           }
         }
@@ -101,6 +111,12 @@ const Mosquitonet = () => {
     }
   };
 
+  const getCookie = (name) => {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(";").shift();
+  };
+
   const handleOrderSubmit = async (e) => {
     e.preventDefault();
 
@@ -115,6 +131,9 @@ const Mosquitonet = () => {
 
     setIsSubmitting(true);
     try {
+      const fbc = getCookie("_fbc");
+      const fbp = getCookie("_fbp");
+
       const orderData = {
         customerName: orderForm.name,
         mobileNumber: orderForm.mobile,
@@ -131,10 +150,22 @@ const Mosquitonet = () => {
         totalAmount: subtotal,
         deliveryCharge: deliveryCharge,
         notes: orderForm.notes || "",
+        fbc,
+        fbp,
       };
 
       const result = await submitOrderToAPI(orderData);
       if (result.success) {
+        ReactPixel.track("Purchase", {
+          currency: "BDT",
+          value: subtotal,
+          contents: selectedVariants.map((item) => ({
+            id: item.variantId,
+            quantity: item.quantity,
+          })),
+          content_type: "product",
+        });
+
         // Reset form
         setOrderForm({
           name: "",

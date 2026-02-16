@@ -59,13 +59,17 @@ const createOrder = async (req, res) => {
     // Send SMS notification (example - you'll need to integrate with SMS gateway)
     // await this.sendOrderConfirmationSMS(mobileNumber, savedOrder.orderNumber);
 
+    const nameParts = customerName.split(" ");
+    const firstName = nameParts[0];
+    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : null;
+
     const userData = new bizSdk.UserData(
       null,
       null,
       null,
       mobileNumber,
-      customerName.split(" ")[0],
-      customerName.split(" ")[1],
+      firstName,
+      lastName,
       null,
       null,
       null,
@@ -73,19 +77,18 @@ const createOrder = async (req, res) => {
       req.ip,
       req.get("User-Agent"),
     );
-    const serverEvent = new bizSdk.ServerEvent(
-      "Purchase",
-      {
+    const serverEvent = new bizSdk.ServerEvent();
+    serverEvent.setEventName("Purchase");
+    serverEvent.setEventTime(Math.floor(Date.now() / 1000));
+    serverEvent.setUserData(userData);
+    serverEvent.setCustomData({
         value: savedOrder.totalAmount,
         currency: "BDT",
-        order_id: savedOrder._id.toString(),
-      },
-      userData,
-      Date.now() / 1000,
-    );
-
+    });
+    serverEvent.setOrderId(savedOrder._id.toString());
+    
     const eventsData = [serverEvent];
-    const eventRequest = new bizSdk.EventRequest(eventsData, pixelId);
+    const eventRequest = new bizSdk.EventRequest(pixelId, eventsData);
     eventRequest.execute().then(
       (response) => {
         console.log("Facebook event sent:", response);
