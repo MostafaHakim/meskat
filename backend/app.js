@@ -22,7 +22,7 @@ app.use("/api/orders", orderRoute);
 app.use("/api/products", productRoute);
 
 app.listen(PORT, () => {
-  console.log("server is running");
+  console.log(`server is running ${PORT}`);
 });
 
 module.exports = app;

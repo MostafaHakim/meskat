@@ -10,7 +10,9 @@ const Mosquitonet = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeImage, setActiveImage] = useState("");
 
-  const [selectedItems, setSelectedItems] = useState([]);
+  // Separate cart state
+  const [cartItems, setCartItems] = useState([]);
+  const [selectedVariants, setSelectedVariants] = useState([]); // For temporary selection before adding to cart
   const [orderForm, setOrderForm] = useState({
     name: "",
     mobile: "",
@@ -27,8 +29,9 @@ const Mosquitonet = () => {
       setProduct(res.data);
       const firstVariant = res.data.variants[0];
       setActiveImage(firstVariant.images[0]);
-      // Initialize with all variants having quantity 0
-      const initialItems = res.data.variants.map((variant) => ({
+
+      // Initialize temporary selection with all variants having quantity 0
+      const initialSelection = res.data.variants.map((variant) => ({
         variantId: variant._id,
         color: variant.color,
         size: variant.size,
@@ -37,28 +40,19 @@ const Mosquitonet = () => {
         quantity: 0,
         image: variant.images[0],
       }));
-      setSelectedItems(initialItems);
+      setSelectedVariants(initialSelection);
     });
   }, []);
 
   if (!product) return <p>Loading...</p>;
 
-  // Handle quantity change for specific variant
+  // Handle quantity change for temporary selection
   const handleQuantityChange = (variantId, change) => {
-    setSelectedItems((prevItems) =>
+    setSelectedVariants((prevItems) =>
       prevItems.map((item) => {
         if (item.variantId === variantId) {
           const newQuantity = item.quantity + change;
           if (newQuantity >= 0 && newQuantity <= item.stock) {
-            if (item.quantity === 0 && newQuantity === 1) {
-              ReactPixel.track("AddToCart", {
-                content_ids: [item.variantId],
-                content_name: product.name,
-                content_type: "product",
-                currency: "BDT",
-                value: item.price,
-              });
-            }
             return { ...item, quantity: newQuantity };
           }
         }
@@ -67,13 +61,89 @@ const Mosquitonet = () => {
     );
   };
 
-  // Calculate total quantities and prices
-  const selectedVariants = selectedItems.filter((item) => item.quantity > 0);
-  const totalItems = selectedVariants.reduce(
-    (sum, item) => sum + item.quantity,
-    0,
-  );
-  const subtotal = selectedVariants.reduce(
+  // Add to cart function
+  const addToCart = () => {
+    // Get items with quantity > 0
+    const itemsToAdd = selectedVariants.filter((item) => item.quantity > 0);
+
+    if (itemsToAdd.length === 0) {
+      return alert("দয়া করে কমপক্ষে একটি পণ্যের পরিমাণ সিলেক্ট করুন!");
+    }
+
+    // Track AddToCart event for Facebook Pixel
+    itemsToAdd.forEach((item) => {
+      ReactPixel.track("AddToCart", {
+        content_ids: [item.variantId],
+        content_name: product.name,
+        content_type: "product",
+        currency: "BDT",
+        value: item.price * item.quantity,
+      });
+    });
+
+    // Add to cart
+    setCartItems((prevCart) => {
+      // Create a new array with existing cart items
+      const newCart = [...prevCart];
+
+      // Add or update items
+      itemsToAdd.forEach((newItem) => {
+        const existingItemIndex = newCart.findIndex(
+          (item) => item.variantId === newItem.variantId,
+        );
+
+        if (existingItemIndex >= 0) {
+          // Update existing item
+          newCart[existingItemIndex] = {
+            ...newCart[existingItemIndex],
+            quantity: newCart[existingItemIndex].quantity + newItem.quantity,
+          };
+        } else {
+          // Add new item
+          newCart.push({ ...newItem });
+        }
+      });
+
+      return newCart;
+    });
+
+    // Reset temporary selection quantities to 0
+    setSelectedVariants((prevItems) =>
+      prevItems.map((item) => ({ ...item, quantity: 0 })),
+    );
+  };
+
+  // Remove from cart
+  const removeFromCart = (variantId) => {
+    setCartItems((prevCart) =>
+      prevCart.filter((item) => item.variantId !== variantId),
+    );
+  };
+
+  // Update cart quantity
+  const updateCartQuantity = (variantId, change) => {
+    setCartItems(
+      (prevCart) =>
+        prevCart
+          .map((item) => {
+            if (item.variantId === variantId) {
+              const newQuantity = item.quantity + change;
+              if (newQuantity > 0 && newQuantity <= item.stock) {
+                return { ...item, quantity: newQuantity };
+              } else if (newQuantity === 0) {
+                // Remove item if quantity becomes 0
+                return null;
+              }
+            }
+            return item;
+          })
+          .filter(Boolean), // Remove null items
+    );
+  };
+
+  // Calculate totals from cart
+  const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+  const subtotal = cartItems.reduce(
     (sum, item) => sum + item.price * item.quantity,
     0,
   );
@@ -87,7 +157,7 @@ const Mosquitonet = () => {
   };
 
   const deliveryCharge = calculateDeliveryCharge();
-  const grandTotal = subtotal;
+  const grandTotal = subtotal + (cartItems.length > 0 ? deliveryCharge : 0);
 
   // Handle input change
   const handleInputChange = (e) => {
@@ -120,9 +190,9 @@ const Mosquitonet = () => {
   const handleOrderSubmit = async (e) => {
     e.preventDefault();
 
-    // Check if any item is selected
-    if (selectedVariants.length === 0) {
-      return alert("দয়া করে কমপক্ষে একটি পণ্য সিলেক্ট করুন!");
+    // Check if cart has items
+    if (cartItems.length === 0) {
+      return alert("দয়া করে কমপক্ষে একটি পণ্য কার্টে যোগ করুন!");
     }
 
     if (!orderForm.name || !orderForm.mobile || !orderForm.address) {
@@ -140,7 +210,7 @@ const Mosquitonet = () => {
         address: orderForm.address,
         paymentMethod: orderForm.paymentMethod,
         transactionId: orderForm.transactionId || null,
-        items: selectedVariants.map((item) => ({
+        items: cartItems.map((item) => ({
           productColor: item.color,
           productSize: item.size,
           quantity: item.quantity,
@@ -159,14 +229,14 @@ const Mosquitonet = () => {
         ReactPixel.track("Purchase", {
           currency: "BDT",
           value: subtotal,
-          contents: selectedVariants.map((item) => ({
+          contents: cartItems.map((item) => ({
             id: item.variantId,
             quantity: item.quantity,
           })),
           content_type: "product",
         });
 
-        // Reset form
+        // Reset form and cart
         setOrderForm({
           name: "",
           mobile: "",
@@ -175,11 +245,7 @@ const Mosquitonet = () => {
           transactionId: "",
           notes: "",
         });
-
-        // Reset quantities to 0
-        setSelectedItems((prevItems) =>
-          prevItems.map((item) => ({ ...item, quantity: 0 })),
-        );
+        setCartItems([]);
 
         alert(
           `✅ অর্ডার সফল!\nঅর্ডার নম্বর: ${result.data.orderNumber}\nমোট আইটেম: ${totalItems}\nমোট টাকা: ৳${result.data.totalAmount}\nডেলিভারি চার্জ: ৳${deliveryCharge}`,
@@ -196,7 +262,7 @@ const Mosquitonet = () => {
     <div className="w-full flex flex-col items-center bg-gray-50 min-h-screen font-kalpurush">
       <Navbar />
       <div className="w-full max-w-6xl flex flex-col lg:flex-row gap-8 p-4 md:p-6">
-        {/* Left - Product */}
+        {/* Left - Product Selection */}
         <div className="lg:w-1/2 bg-white rounded-xl shadow-lg p-6">
           <h2 className="text-3xl font-bold pb-2">{product.name}</h2>
           <p className="text-gray-600 pb-6 text-justify">
@@ -216,12 +282,12 @@ const Mosquitonet = () => {
               রং, সাইজ এবং পরিমাণ সিলেক্ট করুন
             </h3>
             <div className="space-y-4">
-              {selectedItems.map((item) => (
+              {selectedVariants.map((item) => (
                 <div
                   key={item.variantId}
                   className={`flex items-center justify-between p-4 border-2 rounded-xl transition-all ${
                     item.quantity > 0
-                      ? "border-green-500 bg-green-50"
+                      ? "border-blue-500 bg-blue-50"
                       : "border-gray-200 hover:border-gray-300"
                   }`}
                 >
@@ -230,7 +296,7 @@ const Mosquitonet = () => {
                     <img
                       src={item.image}
                       alt={item.color}
-                      className="w-20 h-20 object-cover rounded-lg"
+                      className="w-20 h-20 object-cover rounded-lg cursor-pointer"
                       onClick={() => setActiveImage(item.image)}
                     />
                     <div>
@@ -267,60 +333,82 @@ const Mosquitonet = () => {
                         +
                       </button>
                     </div>
-                    {item.quantity > 0 && (
-                      <p className="text-sm font-semibold text-green-700">
-                        ৳ {item.price * item.quantity}
-                      </p>
-                    )}
                   </div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Summary */}
-          <div className="mt-6 p-4 bg-gray-100 rounded-lg">
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="font-semibold text-gray-700">সিলেক্টেড আইটেম</p>
-                <p className="text-sm text-gray-600">
-                  {totalItems} টি পণ্য | {selectedVariants.length} টি
-                  ভ্যারিয়েন্ট
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="font-semibold text-gray-700">সাবটোটাল</p>
-                <p className="text-xl font-bold text-green-600">৳ {subtotal}</p>
-              </div>
-            </div>
-          </div>
+          {/* Add to Cart Button */}
+          <button
+            onClick={addToCart}
+            disabled={
+              isSubmitting ||
+              selectedVariants.every((item) => item.quantity === 0)
+            }
+            className={`w-full mt-6 py-3 rounded-lg font-bold text-white ${
+              isSubmitting ||
+              selectedVariants.every((item) => item.quantity === 0)
+                ? "bg-gray-400 cursor-not-allowed"
+                : "bg-blue-600 hover:bg-blue-700"
+            }`}
+          >
+            🛒 কার্টে যোগ করুন
+          </button>
         </div>
 
-        {/* Right - Order Form & Summary */}
+        {/* Right - Cart & Order Form */}
         <div className="lg:w-1/2 space-y-6">
-          {/* Order Summary */}
+          {/* Cart Summary */}
           <div className="bg-white p-6 rounded-xl shadow-lg">
-            <h3 className="text-xl font-bold mb-4">অর্ডার বিস্তারিত</h3>
+            <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+              🛒 আপনার কার্ট ({totalItems} টি আইটেম)
+            </h3>
 
-            {selectedVariants.length === 0 ? (
+            {cartItems.length === 0 ? (
               <p className="text-gray-500 text-center py-4">
-                কোন পণ্য সিলেক্ট করা হয়নি
+                আপনার কার্ট খালি। পণ্য সিলেক্ট করে কার্টে যোগ করুন।
               </p>
             ) : (
               <>
-                <div className="space-y-3 mb-4">
-                  {selectedVariants.map((item) => (
+                <div className="space-y-3 mb-4 max-h-96 overflow-y-auto">
+                  {cartItems.map((item) => (
                     <div
                       key={item.variantId}
                       className="flex justify-between items-center border-b pb-2"
                     >
-                      <div>
+                      <div className="flex-1">
                         <p className="font-medium">
                           {item.color} / {item.size}
                         </p>
-                        <p className="text-sm text-gray-600">
-                          {item.quantity} × ৳ {item.price}
-                        </p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <button
+                            onClick={() =>
+                              updateCartQuantity(item.variantId, -1)
+                            }
+                            className="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300"
+                          >
+                            -
+                          </button>
+                          <span className="w-8 text-center">
+                            {item.quantity}
+                          </span>
+                          <button
+                            onClick={() =>
+                              updateCartQuantity(item.variantId, 1)
+                            }
+                            disabled={item.quantity >= item.stock}
+                            className="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50"
+                          >
+                            +
+                          </button>
+                          <button
+                            onClick={() => removeFromCart(item.variantId)}
+                            className="ml-2 text-red-600 hover:text-red-800"
+                          >
+                            ✕
+                          </button>
+                        </div>
                       </div>
                       <p className="font-semibold">
                         ৳ {item.price * item.quantity}
@@ -336,7 +424,7 @@ const Mosquitonet = () => {
                   </div>
                   <div className="flex justify-between">
                     <span>ডেলিভারি চার্জ:</span>
-                    <span>৳ 0</span>
+                    <span>৳ {deliveryCharge}</span>
                   </div>
                   <hr className="my-2" />
                   <div className="flex justify-between text-lg font-bold">
@@ -420,9 +508,9 @@ const Mosquitonet = () => {
 
               <button
                 type="submit"
-                disabled={isSubmitting || selectedVariants.length === 0}
+                disabled={isSubmitting || cartItems.length === 0}
                 className={`w-full py-3 rounded-lg font-bold text-white ${
-                  isSubmitting || selectedVariants.length === 0
+                  isSubmitting || cartItems.length === 0
                     ? "bg-gray-400 cursor-not-allowed"
                     : "bg-green-600 hover:bg-green-700"
                 }`}
@@ -432,9 +520,9 @@ const Mosquitonet = () => {
                   : `অর্ডার কনফার্ম করুন (৳ ${grandTotal})`}
               </button>
 
-              {selectedVariants.length === 0 && (
+              {cartItems.length === 0 && (
                 <p className="text-red-600 text-center mt-2">
-                  কমপক্ষে একটি পণ্য সিলেক্ট করুন
+                  কমপক্ষে একটি পণ্য কার্টে যোগ করুন
                 </p>
               )}
             </form>
