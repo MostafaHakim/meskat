@@ -22,7 +22,7 @@ const Mosquitonet = () => {
     notes: "",
   });
 
-  const id = "6987720bc2d4ff6b5b211a38";
+  const id = "69e4ead6d2f3b2b37f13efe2";
 
   useEffect(() => {
     axios.get(`${API_BASE_URL}/api/products/${id}`).then((res) => {
