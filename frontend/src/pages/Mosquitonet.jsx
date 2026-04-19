@@ -324,7 +324,9 @@ const Mosquitonet = () => {
       <div className="w-full max-w-6xl flex flex-col lg:flex-row gap-8 py-4 md:p-6">
         {/* Left - Product Selection */}
         <div className="lg:w-1/2 bg-white rounded-xl shadow-lg p-2 lg:p-6">
-          <h2 className="text-3xl font-bold pb-2">{product.name}</h2>
+          <h2 className="text-xl md:text-3xl font-bold pb-2 text-center md:text-left">
+            {product.name}
+          </h2>
 
           {/* স্লাইডার কন্টেইনার */}
           <div className="relative group">
