@@ -10,7 +10,8 @@ const Mosquitonet = () => {
   const [product, setProduct] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeImage, setActiveImage] = useState("");
-  const [currentSlide, setCurrentSlide] = useState(0); // স্লাইড ইনডেক্স ট্র্যাক করার জন্য
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [currentImageColor, setCurrentImageColor] = useState(""); // বর্তমান ইমেজের কালার
 
   // Separate cart state
   const [cartItems, setCartItems] = useState([]);
@@ -26,39 +27,64 @@ const Mosquitonet = () => {
 
   const id = "69e4ead6d2f3b2b37f13efe2";
 
-  // সব ভেরিয়েন্টের সব ইমেজ একত্রিত করা
-  const getAllImages = () => {
+  // সব ভেরিয়েন্টের সব ইমেজ এবং তাদের কালার একত্রিত করা
+  const getAllImagesWithColor = () => {
     if (!product) return [];
-    const images = [];
+    const imagesWithColor = [];
     product.variants.forEach((variant) => {
       variant.images.forEach((img) => {
-        if (!images.includes(img)) {
-          images.push(img);
+        if (!imagesWithColor.find((item) => item.image === img)) {
+          imagesWithColor.push({
+            image: img,
+            color: variant.color,
+            variantId: variant._id,
+          });
         }
       });
     });
-    return images;
+    return imagesWithColor;
   };
 
-  const allImages = getAllImages();
+  const allImagesWithColor = getAllImagesWithColor();
+  const allImages = allImagesWithColor.map((item) => item.image);
+
+  // বর্তমান ইমেজের কালার খুঁজে বের করা
+  const getCurrentImageColor = () => {
+    const current = allImagesWithColor.find(
+      (item) => item.image === activeImage,
+    );
+    return current ? current.color : "";
+  };
 
   // স্লাইড পরিবর্তনের ফাংশন
   const nextSlide = () => {
-    setCurrentSlide((prev) => (prev + 1) % allImages.length);
-    setActiveImage(allImages[(currentSlide + 1) % allImages.length]);
+    const newIndex = (currentSlide + 1) % allImages.length;
+    setCurrentSlide(newIndex);
+    const newImage = allImages[newIndex];
+    setActiveImage(newImage);
+    const newColor =
+      allImagesWithColor.find((item) => item.image === newImage)?.color || "";
+    setCurrentImageColor(newColor);
   };
 
   const prevSlide = () => {
-    setCurrentSlide((prev) => (prev - 1 + allImages.length) % allImages.length);
-    setActiveImage(
-      allImages[(currentSlide - 1 + allImages.length) % allImages.length],
-    );
+    const newIndex = (currentSlide - 1 + allImages.length) % allImages.length;
+    setCurrentSlide(newIndex);
+    const newImage = allImages[newIndex];
+    setActiveImage(newImage);
+    const newColor =
+      allImagesWithColor.find((item) => item.image === newImage)?.color || "";
+    setCurrentImageColor(newColor);
   };
 
   // নির্দিষ্ট ইমেজে যাওয়া
   const goToSlide = (index) => {
     setCurrentSlide(index);
-    setActiveImage(allImages[index]);
+    const newImage = allImages[index];
+    setActiveImage(newImage);
+    const newColor =
+      allImagesWithColor.find((item) => item.image === newImage)?.color || "";
+    setCurrentImageColor(newColor);
   };
 
   useEffect(() => {
@@ -68,6 +94,7 @@ const Mosquitonet = () => {
       const firstImage = firstVariant.images[0];
       setActiveImage(firstImage);
       setCurrentSlide(0);
+      setCurrentImageColor(firstVariant.color);
 
       // Initialize temporary selection with all variants having quantity 0
       const initialSelection = res.data.variants.map((variant) => ({
@@ -310,6 +337,13 @@ const Mosquitonet = () => {
               className="w-full h-96 object-cover rounded-xl shadow-md"
             />
 
+            {/* কালার ব্যাজ - বাম দিকে নিচে */}
+            {currentImageColor && (
+              <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur-sm text-white px-4 py-1 rounded-lg font-semibold shadow-lg">
+                <span className="text-sm">{currentImageColor}</span>
+              </div>
+            )}
+
             {/* নেভিগেশন বাটন - শুধু hover এ দেখাবে */}
             {allImages.length > 1 && (
               <>
@@ -346,21 +380,25 @@ const Mosquitonet = () => {
             )}
           </div>
 
-          {/* থাম্বনেইল গ্যালারি */}
+          {/* থাম্বনেইল গ্যালারি - কালার সহ */}
           {allImages.length > 1 && (
             <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
-              {allImages.map((img, index) => (
-                <img
-                  key={index}
-                  src={img}
-                  alt={`Thumbnail ${index + 1}`}
-                  onClick={() => goToSlide(index)}
-                  className={`w-16 h-16 object-cover rounded-lg cursor-pointer transition-all duration-200 ${
-                    currentSlide === index
-                      ? "border-2 border-blue-500 opacity-100"
-                      : "border border-gray-300 opacity-70 hover:opacity-100"
-                  }`}
-                />
+              {allImagesWithColor.map((item, index) => (
+                <div key={index} className="flex flex-col items-center gap-1">
+                  <img
+                    src={item.image}
+                    alt={item.color}
+                    onClick={() => goToSlide(index)}
+                    className={`w-16 h-16 object-cover rounded-lg cursor-pointer transition-all duration-200 ${
+                      currentSlide === index
+                        ? "border-2 border-blue-500 opacity-100"
+                        : "border border-gray-300 opacity-70 hover:opacity-100"
+                    }`}
+                  />
+                  <span className="text-xs text-gray-600 font-medium">
+                    {item.color}
+                  </span>
+                </div>
               ))}
             </div>
           )}
@@ -384,7 +422,12 @@ const Mosquitonet = () => {
                       src={item.image}
                       alt={item.color}
                       className="w-20 h-20 object-cover rounded-lg cursor-pointer"
-                      onClick={() => goToSlide(allImages.indexOf(item.image))}
+                      onClick={() => {
+                        const index = allImagesWithColor.findIndex(
+                          (i) => i.image === item.image,
+                        );
+                        if (index !== -1) goToSlide(index);
+                      }}
                     />
                     <div>
                       <h3 className="font-semibold text-gray-800">
