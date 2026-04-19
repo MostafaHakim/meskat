@@ -22,7 +22,7 @@ const Mosquitonet = () => {
     notes: "",
   });
 
-  const id = "69e4ead6d2f3b2b37f13efe2";
+  const id = "6987720bc2d4ff6b5b211a38";
 
   useEffect(() => {
     axios.get(`${API_BASE_URL}/api/products/${id}`).then((res) => {
@@ -261,9 +261,9 @@ const Mosquitonet = () => {
   return (
     <div className="w-full flex flex-col items-center bg-gray-50 min-h-screen font-kalpurush">
       <Navbar />
-      <div className="w-full max-w-6xl flex flex-col lg:flex-row gap-8 p-4 md:p-6">
+      <div className="w-full max-w-6xl flex flex-col lg:flex-row gap-8 py-4 md:p-6">
         {/* Left - Product Selection */}
-        <div className="lg:w-1/2 bg-white rounded-xl shadow-lg p-6">
+        <div className="lg:w-1/2 bg-white rounded-xl shadow-lg p-2 lg:p-6">
           <h2 className="text-3xl font-bold pb-2">{product.name}</h2>
           <p className="text-gray-600 pb-6 text-justify">
             {product.description}
