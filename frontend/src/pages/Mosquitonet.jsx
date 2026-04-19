@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import Navbar from "../components/Navbar";
 import axios from "axios";
 import ReactPixel from "react-facebook-pixel";
+import { Oval } from "react-loader-spinner";
 
 const API_BASE_URL = import.meta.env.VITE_BASE_URL;
 
@@ -9,10 +10,11 @@ const Mosquitonet = () => {
   const [product, setProduct] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeImage, setActiveImage] = useState("");
+  const [currentSlide, setCurrentSlide] = useState(0); // স্লাইড ইনডেক্স ট্র্যাক করার জন্য
 
   // Separate cart state
   const [cartItems, setCartItems] = useState([]);
-  const [selectedVariants, setSelectedVariants] = useState([]); // For temporary selection before adding to cart
+  const [selectedVariants, setSelectedVariants] = useState([]);
   const [orderForm, setOrderForm] = useState({
     name: "",
     mobile: "",
@@ -24,11 +26,48 @@ const Mosquitonet = () => {
 
   const id = "69e4ead6d2f3b2b37f13efe2";
 
+  // সব ভেরিয়েন্টের সব ইমেজ একত্রিত করা
+  const getAllImages = () => {
+    if (!product) return [];
+    const images = [];
+    product.variants.forEach((variant) => {
+      variant.images.forEach((img) => {
+        if (!images.includes(img)) {
+          images.push(img);
+        }
+      });
+    });
+    return images;
+  };
+
+  const allImages = getAllImages();
+
+  // স্লাইড পরিবর্তনের ফাংশন
+  const nextSlide = () => {
+    setCurrentSlide((prev) => (prev + 1) % allImages.length);
+    setActiveImage(allImages[(currentSlide + 1) % allImages.length]);
+  };
+
+  const prevSlide = () => {
+    setCurrentSlide((prev) => (prev - 1 + allImages.length) % allImages.length);
+    setActiveImage(
+      allImages[(currentSlide - 1 + allImages.length) % allImages.length],
+    );
+  };
+
+  // নির্দিষ্ট ইমেজে যাওয়া
+  const goToSlide = (index) => {
+    setCurrentSlide(index);
+    setActiveImage(allImages[index]);
+  };
+
   useEffect(() => {
     axios.get(`${API_BASE_URL}/api/products/${id}`).then((res) => {
       setProduct(res.data);
       const firstVariant = res.data.variants[0];
-      setActiveImage(firstVariant.images[0]);
+      const firstImage = firstVariant.images[0];
+      setActiveImage(firstImage);
+      setCurrentSlide(0);
 
       // Initialize temporary selection with all variants having quantity 0
       const initialSelection = res.data.variants.map((variant) => ({
@@ -44,7 +83,13 @@ const Mosquitonet = () => {
     });
   }, []);
 
-  if (!product) return <p>Loading...</p>;
+  if (!product) {
+    return (
+      <div className="w-full h-screen flex items-center justify-center">
+        <Oval height={80} width={80} color="#4fa94d" />
+      </div>
+    );
+  }
 
   // Handle quantity change for temporary selection
   const handleQuantityChange = (variantId, change) => {
@@ -63,14 +108,12 @@ const Mosquitonet = () => {
 
   // Add to cart function
   const addToCart = () => {
-    // Get items with quantity > 0
     const itemsToAdd = selectedVariants.filter((item) => item.quantity > 0);
 
     if (itemsToAdd.length === 0) {
       return alert("দয়া করে কমপক্ষে একটি পণ্যের পরিমাণ সিলেক্ট করুন!");
     }
 
-    // Track AddToCart event for Facebook Pixel
     itemsToAdd.forEach((item) => {
       ReactPixel.track("AddToCart", {
         content_ids: [item.variantId],
@@ -81,25 +124,20 @@ const Mosquitonet = () => {
       });
     });
 
-    // Add to cart
     setCartItems((prevCart) => {
-      // Create a new array with existing cart items
       const newCart = [...prevCart];
 
-      // Add or update items
       itemsToAdd.forEach((newItem) => {
         const existingItemIndex = newCart.findIndex(
           (item) => item.variantId === newItem.variantId,
         );
 
         if (existingItemIndex >= 0) {
-          // Update existing item
           newCart[existingItemIndex] = {
             ...newCart[existingItemIndex],
             quantity: newCart[existingItemIndex].quantity + newItem.quantity,
           };
         } else {
-          // Add new item
           newCart.push({ ...newItem });
         }
       });
@@ -107,7 +145,6 @@ const Mosquitonet = () => {
       return newCart;
     });
 
-    // Reset temporary selection quantities to 0
     setSelectedVariants((prevItems) =>
       prevItems.map((item) => ({ ...item, quantity: 0 })),
     );
@@ -122,22 +159,20 @@ const Mosquitonet = () => {
 
   // Update cart quantity
   const updateCartQuantity = (variantId, change) => {
-    setCartItems(
-      (prevCart) =>
-        prevCart
-          .map((item) => {
-            if (item.variantId === variantId) {
-              const newQuantity = item.quantity + change;
-              if (newQuantity > 0 && newQuantity <= item.stock) {
-                return { ...item, quantity: newQuantity };
-              } else if (newQuantity === 0) {
-                // Remove item if quantity becomes 0
-                return null;
-              }
+    setCartItems((prevCart) =>
+      prevCart
+        .map((item) => {
+          if (item.variantId === variantId) {
+            const newQuantity = item.quantity + change;
+            if (newQuantity > 0 && newQuantity <= item.stock) {
+              return { ...item, quantity: newQuantity };
+            } else if (newQuantity === 0) {
+              return null;
             }
-            return item;
-          })
-          .filter(Boolean), // Remove null items
+          }
+          return item;
+        })
+        .filter(Boolean),
     );
   };
 
@@ -190,7 +225,6 @@ const Mosquitonet = () => {
   const handleOrderSubmit = async (e) => {
     e.preventDefault();
 
-    // Check if cart has items
     if (cartItems.length === 0) {
       return alert("দয়া করে কমপক্ষে একটি পণ্য কার্টে যোগ করুন!");
     }
@@ -236,7 +270,6 @@ const Mosquitonet = () => {
           content_type: "product",
         });
 
-        // Reset form and cart
         setOrderForm({
           name: "",
           mobile: "",
@@ -269,13 +302,68 @@ const Mosquitonet = () => {
             {product.description}
           </p>
 
-          <div className="relative">
+          {/* স্লাইডার কন্টেইনার */}
+          <div className="relative group">
             <img
               src={activeImage}
-              alt="Main product"
+              alt="Product slideshow"
               className="w-full h-96 object-cover rounded-xl shadow-md"
             />
+
+            {/* নেভিগেশন বাটন - শুধু hover এ দেখাবে */}
+            {allImages.length > 1 && (
+              <>
+                <button
+                  onClick={prevSlide}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                >
+                  ❮
+                </button>
+                <button
+                  onClick={nextSlide}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                >
+                  ❯
+                </button>
+              </>
+            )}
+
+            {/* ডট ইন্ডিকেটর */}
+            {allImages.length > 1 && (
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+                {allImages.map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => goToSlide(index)}
+                    className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                      currentSlide === index
+                        ? "bg-white w-4"
+                        : "bg-white/50 hover:bg-white/80"
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
           </div>
+
+          {/* থাম্বনেইল গ্যালারি */}
+          {allImages.length > 1 && (
+            <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
+              {allImages.map((img, index) => (
+                <img
+                  key={index}
+                  src={img}
+                  alt={`Thumbnail ${index + 1}`}
+                  onClick={() => goToSlide(index)}
+                  className={`w-16 h-16 object-cover rounded-lg cursor-pointer transition-all duration-200 ${
+                    currentSlide === index
+                      ? "border-2 border-blue-500 opacity-100"
+                      : "border border-gray-300 opacity-70 hover:opacity-100"
+                  }`}
+                />
+              ))}
+            </div>
+          )}
 
           <div className="mt-6">
             <h3 className="text-lg font-semibold mb-4">
@@ -291,13 +379,12 @@ const Mosquitonet = () => {
                       : "border-gray-200 hover:border-gray-300"
                   }`}
                 >
-                  {/* Left: Image and Info */}
                   <div className="flex items-center gap-4">
                     <img
                       src={item.image}
                       alt={item.color}
                       className="w-20 h-20 object-cover rounded-lg cursor-pointer"
-                      onClick={() => setActiveImage(item.image)}
+                      onClick={() => goToSlide(allImages.indexOf(item.image))}
                     />
                     <div>
                       <h3 className="font-semibold text-gray-800">
@@ -310,7 +397,6 @@ const Mosquitonet = () => {
                     </div>
                   </div>
 
-                  {/* Right: Quantity Selector */}
                   <div className="flex flex-col items-end gap-2">
                     <div className="flex items-center border border-gray-300 rounded-lg">
                       <button
@@ -339,7 +425,6 @@ const Mosquitonet = () => {
             </div>
           </div>
 
-          {/* Add to Cart Button */}
           <button
             onClick={addToCart}
             disabled={
