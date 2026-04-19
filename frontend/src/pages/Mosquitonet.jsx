@@ -325,9 +325,6 @@ const Mosquitonet = () => {
         {/* Left - Product Selection */}
         <div className="lg:w-1/2 bg-white rounded-xl shadow-lg p-2 lg:p-6">
           <h2 className="text-3xl font-bold pb-2">{product.name}</h2>
-          <p className="text-gray-600 pb-6 text-justify">
-            {product.description}
-          </p>
 
           {/* স্লাইডার কন্টেইনার */}
           <div className="relative group">
@@ -402,7 +399,12 @@ const Mosquitonet = () => {
               ))}
             </div>
           )}
-
+          <div className="py-2">
+            <h2 className="text-xl">পণ্যের বিবরণ</h2>
+            <p className="text-gray-600 pb-6 text-justify whitespace-pre-line">
+              {product.description}
+            </p>
+          </div>
           <div className="mt-6">
             <h3 className="text-lg font-semibold mb-4">
               রং, সাইজ এবং পরিমাণ সিলেক্ট করুন
